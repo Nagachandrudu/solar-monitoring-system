@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Solar Monitoring Dashboard</title>
+
+
+    <style>
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+
+        body {
+            background: #f4f7fb;
+            color: #222;
+            min-height: 100vh;
+        }
+
+
+        /* HEADER */
+
+        .header {
+            background: white;
+            padding: 20px 40px;
+
+            box-shadow:
+                0 2px 8px rgba(0,0,0,0.08);
+
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+
+        .header h1 {
+            font-size: 28px;
+            color: #1f2937;
+        }
+
+
+        .header p {
+            margin-top: 5px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+
+        /* CONNECTION */
+
+        .connection {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+
+        .dot {
+            width: 12px;
+            height: 12px;
+
+            background: #22c55e;
+
+            border-radius: 50%;
+        }
+
+
+        /* MAIN */
+
+        .container {
+            width: 90%;
+            max-width: 1200px;
+
+            margin: 35px auto;
+        }
+
+
+        /* SENSOR CARDS */
+
+        .cards {
+
+            display: grid;
+
+            grid-template-columns:
+                repeat(5, 1fr);
+
+            gap: 20px;
+        }
+
+
+        .card {
+
+            background: white;
+
+            padding: 25px 20px;
+
+            border-radius: 15px;
+
+            box-shadow:
+                0 4px 12px rgba(0,0,0,0.08);
+
+            text-align: center;
+
+            transition: 0.2s;
+        }
+
+
+        .card:hover {
+            transform: translateY(-4px);
+        }
+
+
+        .card h3 {
+
+            color: #6b7280;
+
+            font-size: 16px;
+
+            margin-bottom: 15px;
+        }
+
+
+        .value {
+
+            font-size: 32px;
+
+            font-weight: bold;
+
+            color: #111827;
+        }
+
+
+        .unit {
+
+            margin-top: 8px;
+
+            color: #9ca3af;
+
+            font-size: 14px;
+        }
+
+
+        /* ANALYZE BUTTON */
+
+        .analyze-section {
+
+            margin-top: 30px;
+
+            background: white;
+
+            padding: 25px;
+
+            border-radius: 15px;
+
+            box-shadow:
+                0 4px 12px rgba(0,0,0,0.08);
+
+            text-align: center;
+        }
+
+
+        .analyze-button {
+
+            background: #2563eb;
+
+            color: white;
+
+            border: none;
+
+            padding: 14px 30px;
+
+            border-radius: 8px;
+
+            font-size: 16px;
+
+            font-weight: bold;
+
+            cursor: pointer;
+        }
+
+
+        .analyze-button:hover {
+
+            background: #1d4ed8;
+        }
+
+
+        .analyze-button:disabled {
+
+            background: #9ca3af;
+
+            cursor: not-allowed;
+        }
+
+
+        /* ANALYSIS RESULT */
+
+        .analysis-result {
+
+            margin-top: 20px;
+
+            display: none;
+        }
+
+
+        .analysis-grid {
+
+            display: grid;
+
+            grid-template-columns:
+                repeat(4, 1fr);
+
+            gap: 15px;
+
+            margin-top: 20px;
+        }
+
+
+        .analysis-card {
+
+            background: #f8fafc;
+
+            padding: 18px;
+
+            border-radius: 10px;
+
+            text-align: center;
+        }
+
+
+        .analysis-card h4 {
+
+            color: #64748b;
+
+            margin-bottom: 8px;
+        }
+
+
+        .analysis-card span {
+
+            font-size: 24px;
+
+            font-weight: bold;
+        }
+
+
+        /* SYSTEM STATUS */
+
+        .status-box {
+
+            margin-top: 30px;
+
+            background: #dcfce7;
+
+            border-left:
+                6px solid #22c55e;
+
+            padding: 22px;
+
+            border-radius: 10px;
+
+            box-shadow:
+                0 3px 10px rgba(0,0,0,0.06);
+        }
+
+
+        .status-box h2 {
+
+            color: #166534;
+
+            margin-bottom: 8px;
+        }
+
+
+        .status-box p {
+
+            color: #166534;
+
+            font-size: 16px;
+        }
+
+
+        /* LAST UPDATE */
+
+        .last-update {
+
+            margin-top: 25px;
+
+            text-align: center;
+
+            color: #6b7280;
+
+            font-size: 14px;
+        }
+
+
+        /* RESPONSIVE */
+
+        @media (max-width: 1000px) {
+
+            .cards {
+
+                grid-template-columns:
+                    repeat(2, 1fr);
+            }
+
+            .analysis-grid {
+
+                grid-template-columns:
+                    repeat(2, 1fr);
+            }
+        }
+
+
+        @media (max-width: 600px) {
+
+            .header {
+
+                padding: 20px;
+
+                flex-direction: column;
+
+                align-items: flex-start;
+
+                gap: 15px;
+            }
+
+
+            .container {
+
+                width: 92%;
+            }
+
+
+            .cards {
+
+                grid-template-columns: 1fr;
+            }
+
+
+            .analysis-grid {
+
+                grid-template-columns: 1fr;
+            }
+        }
+
+/* =========================================================
+   LAST AUTOMATIC HOURLY ANALYSIS
+   ========================================================= */
+
+.hourly-analysis {
+    margin-top: 30px;
+    padding: 25px;
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+}
+
+.hourly-analysis h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+}
+
+.analysis-status {
+    display: inline-block;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+    margin-bottom: 20px;
+    background: #e5e7eb;
+}
+
+.analysis-details {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+}
+
+.analysis-details div {
+    padding: 15px;
+    border-radius: 10px;
+    background: #f5f6f8;
+}
+
+.analysis-details span {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 6px;
+    color: #666;
+}
+
+.analysis-details strong {
+    display: block;
+    font-size: 16px;
+}
+
+@media (max-width: 768px) {
+
+    .analysis-details {
+        grid-template-columns: 1fr;
+    }
+
+}
+    </style>
+
+</head>
+
+
+<body>
+
+
+    <!-- HEADER -->
+
+    <div class="header">
+
+        <div>
+
+            <h1>
+                ☀️ Solar Monitoring Dashboard
+            </h1>
+
+            <p>
+                Real-Time Solar Panel Performance
+                Monitoring System
+            </p>
+
+        </div>
+
+
+        <div class="connection">
+
+            <div
+                class="dot"
+                id="connectionDot">
+            </div>
+
+            <span id="connectionStatus">
+                Connecting...
+            </span>
+
+        </div>
+
+    </div>
+
+
+
+    <!-- MAIN -->
+
+    <div class="container">
+
+
+        <!-- SENSOR CARDS -->
+
+        <div class="cards">
+
+
+            <div class="card">
+
+                <h3>Voltage</h3>
+
+                <div
+                    class="value"
+                    id="voltage">
+                    --
+                </div>
+
+                <div class="unit">
+                    Volts
+                </div>
+
+            </div>
+
+
+
+            <div class="card">
+
+                <h3>Current</h3>
+
+                <div
+                    class="value"
+                    id="current">
+                    --
+                </div>
+
+                <div class="unit">
+                    mA
+                </div>
+
+            </div>
+
+
+
+            <div class="card">
+
+                <h3>Power</h3>
+
+                <div
+                    class="value"
+                    id="power">
+                    --
+                </div>
+
+                <div class="unit">
+                    mW
+                </div>
+
+            </div>
+
+
+
+            <div class="card">
+
+                <h3>Temperature</h3>
+
+                <div
+                    class="value"
+                    id="temperature">
+                    --
+                </div>
+
+                <div class="unit">
+                    °C
+                </div>
+
+            </div>
+
+
+
+            <div class="card">
+
+                <h3>Light Intensity</h3>
+
+                <div
+                    class="value"
+                    id="light">
+                    --
+                </div>
+
+                <div class="unit">
+                    lux
+                </div>
+
+            </div>
+
+        </div>
+
+<!-- LAST AUTOMATIC HOURLY ANALYSIS -->
+<div class="hourly-analysis">
+
+    <h2>Last Automatic Hour Analysis</h2>
+
+    <div class="analysis-status" id="hourlyStatus">
+        WAITING
+    </div>
+    <div id="dashboardAlert"
+        style="display:none;
+            margin:15px 0;
+            padding:15px;
+            border-radius:10px;
+            font-weight:bold;
+            font-size:16px;">
+    </div>
+    <div class="analysis-details">
+
+        <div>
+            <span>Analysis Time</span>
+            <strong id="analysisTime">--</strong>
+        </div>
+
+        <div>
+            <span>Actual Power</span>
+            <strong id="hourlyPower">--</strong>
+        </div>
+
+        <div>
+            <span>Expected Power</span>
+            <strong id="expectedPower">--</strong>
+        </div>
+
+        <div>
+            <span>Temperature</span>
+            <strong id="hourlyTemperature">--</strong>
+        </div>
+
+        <div>
+            <span>Light Intensity</span>
+            <strong id="hourlyLight">--</strong>
+        </div>
+
+        <div>
+            <span>Alert</span>
+            <strong id="hourlyMessage">No analysis yet</strong>
+        </div>
+
+    </div>
+
+</div>
+
+        <!-- ANALYZE SECTION -->
+
+        <div class="analyze-section">
+
+            <h2>
+                Solar Data Analysis
+            </h2>
+
+            <p style="
+                margin-top:8px;
+                color:#64748b;
+            ">
+                Analyze all sensor records stored
+                in the Excel file.
+            </p>
+
+
+            <br>
+
+
+            <button
+                class="analyze-button"
+                id="analyzeButton"
+                onclick="analyzeData()">
+
+                Analyze Stored Data
+
+            </button>
+
+
+
+            <!-- ANALYSIS RESULT -->
+
+            <div
+                class="analysis-result"
+                id="analysisResult">
+
+
+                <div class="analysis-grid">
+
+
+                    <div class="analysis-card">
+
+                        <h4>
+                            Total Records
+                        </h4>
+
+                        <span id="totalRecords">
+                            --
+                        </span>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <h4>
+                            Average Power
+                        </h4>
+
+                        <span id="averagePower">
+                            --
+                        </span>
+
+                        <small>
+                            mW
+                        </small>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <h4>
+                            Average Temperature
+                        </h4>
+
+                        <span id="averageTemperature">
+                            --
+                        </span>
+
+                        <small>
+                            °C
+                        </small>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <h4>
+                            Average Light
+                        </h4>
+
+                        <span id="averageLight">
+                            --
+                        </span>
+
+                        <small>
+                            lux
+                        </small>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <h4>
+                            Normal
+                        </h4>
+
+                        <span id="normalCount">
+                            --
+                        </span>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <h4>
+                            Warning
+                        </h4>
+
+                        <span id="warningCount">
+                            --
+                        </span>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <h4>
+                            Low Output
+                        </h4>
+
+                        <span id="lowOutputCount">
+                            --
+                        </span>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <h4>
+                            Critical
+                        </h4>
+
+                        <span id="criticalCount">
+                            --
+                        </span>
+
+                    </div>
+
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+
+        <!-- SYSTEM STATUS -->
+
+        <div
+            class="status-box"
+            id="statusBox">
+
+            <h2>
+                System Status
+            </h2>
+
+            <p id="systemStatus">
+
+                Waiting for solar data...
+
+            </p>
+
+        </div>
+
+
+
+        <!-- LAST UPDATE -->
+
+        <div class="last-update">
+
+            Last Update:
+
+            <span id="lastUpdate">
+                --
+            </span>
+
+        </div>
+
+
+    </div>
+
+
+
+    <!-- JAVASCRIPT -->
+
+    <script>
+
+
+        const API_URL =
+            "http://10.177.255.157:5000/latest";
+
+
+        const ANALYZE_URL =
+            "http://10.177.255.157:5000/analyze";
+
+
+
+        // =================================================
+        // GET LIVE SENSOR DATA
+        // =================================================
+
+        async function getLatestData()
+        {
+
+            try
+            {
+
+                const response =
+                    await fetch(API_URL);
+
+
+                if (!response.ok)
+                {
+                    throw new Error(
+                        "Server error"
+                    );
+                }
+
+
+                const data =
+                    await response.json();
+
+
+                document.getElementById(
+                    "voltage"
+                ).textContent =
+                    Number(data.voltage)
+                    .toFixed(2);
+
+
+                document.getElementById(
+                    "current"
+                ).textContent =
+                    Number(data.current)
+                    .toFixed(2);
+
+
+                document.getElementById(
+                    "power"
+                ).textContent =
+                    Number(data.power)
+                    .toFixed(2);
+
+
+                document.getElementById(
+                    "temperature"
+                ).textContent =
+                    Number(data.temperature)
+                    .toFixed(2);
+
+
+                document.getElementById(
+                    "light"
+                ).textContent =
+                    Number(data.light)
+                    .toFixed(2);
+
+
+                document.getElementById(
+                    "lastUpdate"
+                ).textContent =
+                    data.datetime;
+
+
+                document.getElementById(
+                    "connectionStatus"
+                ).textContent =
+                    "Connected";
+
+
+                document.getElementById(
+                    "connectionDot"
+                ).style.background =
+                    "#22c55e";
+
+            }
+
+
+            catch(error)
+            {
+
+                console.error(error);
+
+
+                document.getElementById(
+                    "connectionStatus"
+                ).textContent =
+                    "Disconnected";
+
+
+                document.getElementById(
+                    "connectionDot"
+                ).style.background =
+                    "#ef4444";
+
+            }
+
+        }
+
+
+
+        // =================================================
+        // ANALYZE EXCEL DATA
+        // =================================================
+
+        async function analyzeData()
+        {
+
+            const button =
+                document.getElementById(
+                    "analyzeButton"
+                );
+
+
+            button.disabled = true;
+
+            button.textContent =
+                "Analyzing...";
+
+
+            try
+            {
+
+                const response =
+                    await fetch(ANALYZE_URL);
+
+
+                if (!response.ok)
+                {
+                    throw new Error(
+                        "Analysis server error"
+                    );
+                }
+
+
+                const data =
+                    await response.json();
+
+
+                if (data.status !== "success")
+                {
+
+                    alert(
+                        data.message
+                    );
+
+                    return;
+                }
+
+
+                // Display analysis
+
+                document.getElementById(
+                    "totalRecords"
+                ).textContent =
+                    data.total_records;
+
+
+                document.getElementById(
+                    "averagePower"
+                ).textContent =
+                    data.average_power;
+
+
+                document.getElementById(
+                    "averageTemperature"
+                ).textContent =
+                    data.average_temperature;
+
+
+                document.getElementById(
+                    "averageLight"
+                ).textContent =
+                    data.average_light;
+
+
+                document.getElementById(
+                    "normalCount"
+                ).textContent =
+                    data.normal;
+
+
+                document.getElementById(
+                    "warningCount"
+                ).textContent =
+                    data.warning;
+
+
+                document.getElementById(
+                    "lowOutputCount"
+                ).textContent =
+                    data.low_output;
+
+
+                document.getElementById(
+                    "criticalCount"
+                ).textContent =
+                    data.critical;
+
+
+                // Show result
+
+                document.getElementById(
+                    "analysisResult"
+                ).style.display =
+                    "block";
+
+
+                // Overall status
+
+                const statusBox =
+                    document.getElementById(
+                        "statusBox"
+                    );
+
+
+                const statusText =
+                    document.getElementById(
+                        "systemStatus"
+                    );
+
+
+                if (
+                    data.overall_status
+                    === "NORMAL"
+                )
+                {
+
+                    statusBox.style.background =
+                        "#dcfce7";
+
+                    statusBox.style.borderLeftColor =
+                        "#22c55e";
+
+                }
+
+                else
+                {
+
+                    statusBox.style.background =
+                        "#fee2e2";
+
+                    statusBox.style.borderLeftColor =
+                        "#ef4444";
+
+                }
+
+
+                statusText.textContent =
+                    data.message;
+
+
+                document.querySelector(
+                    "#statusBox h2"
+                ).textContent =
+                    "System Status: "
+                    + data.overall_status;
+
+            }
+
+
+            catch(error)
+            {
+
+                console.error(error);
+
+
+                alert(
+                    "Unable to analyze data. "
+                    + "Make sure Flask is running."
+                );
+
+            }
+
+
+            finally
+            {
+
+                button.disabled = false;
+
+                button.textContent =
+                    "Analyze Stored Data";
+
+            }
+
+        }
+
+
+
+        // =================================================
+        // START LIVE DATA
+        // =================================================
+
+        getLatestData();
+
+
+        // Update every 5 seconds
+
+        setInterval(
+            getLatestData,
+            5000
+        );
+
+// =========================================================
+// LAST AUTOMATIC HOURLY ANALYSIS
+// =========================================================
+
+// =========================================================
+// LAST AUTOMATIC HOURLY ANALYSIS
+// =========================================================
+
+async function loadLastHourlyAnalysis() {
+
+    try {
+
+        const response = await fetch(
+            "http://10.177.255.157:5000/last-hourly-analysis"
+        );
+
+        const data = await response.json();
+
+        console.log("Last hourly analysis:", data);
+
+        document.getElementById("hourlyStatus").textContent =
+            data.status || "WAITING";
+// Update status appearance
+const statusElement = document.getElementById("hourlyStatus");
+
+statusElement.style.background = "";
+statusElement.style.color = "";
+
+if (data.status === "NORMAL") {
+
+    statusElement.style.background = "#d1fae5";
+    statusElement.style.color = "#065f46";
+
+} else if (data.status === "WARNING") {
+
+    statusElement.style.background = "#fef3c7";
+    statusElement.style.color = "#92400e";
+
+} else if (
+    data.status === "LOW" ||
+    data.status === "CRITICAL"
+) {
+
+    statusElement.style.background = "#fee2e2";
+    statusElement.style.color = "#991b1b";
+
+} else {
+
+    statusElement.style.background = "#e5e7eb";
+    statusElement.style.color = "#374151";
+}
+
+        document.getElementById("analysisTime").textContent =
+            data.analysis_time || "--";
+
+        document.getElementById("hourlyMessage").textContent =
+            data.message || "No analysis yet";
+// Dashboard alert
+const alertBox = document.getElementById("dashboardAlert");
+
+if (
+    data.status === "LOW" ||
+    data.status === "CRITICAL"
+) {
+    alertBox.style.display = "block";
+    alertBox.style.background = "#fee2e2";
+    alertBox.style.color = "#991b1b";
+    alertBox.textContent =
+        "⚠️ System producing less. Please check your system.";
+
+} else if (data.status === "WARNING") {
+
+    alertBox.style.display = "block";
+    alertBox.style.background = "#fef3c7";
+    alertBox.style.color = "#92400e";
+    alertBox.textContent =
+        "⚠️ Warning: Solar power production is below the expected level.";
+
+} else if (data.status === "NORMAL") {
+
+    alertBox.style.display = "block";
+    alertBox.style.background = "#d1fae5";
+    alertBox.style.color = "#065f46";
+    alertBox.textContent =
+        "✓ System operating normally.";
+
+} else {
+
+    alertBox.style.display = "none";
+}
+        // Analysis result data
+        if (data.data) {
+
+            const result = data.data;
+
+            document.getElementById("hourlyPower").textContent =
+                result.avg_power !== undefined
+                    ? result.avg_power + " mW"
+                    : "--";
+
+            document.getElementById("expectedPower").textContent =
+                result.expected_power !== undefined
+                    ? result.expected_power + " mW"
+                    : "--";
+
+            document.getElementById("hourlyTemperature").textContent =
+                result.avg_temperature !== undefined
+                    ? result.avg_temperature + " °C"
+                    : "--";
+
+            document.getElementById("hourlyLight").textContent =
+                result.avg_light !== undefined
+                    ? result.avg_light + " lux"
+                    : "--";
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Could not load hourly analysis:",
+            error
+        );
+    }
+}
+
+// Load immediately
+loadLastHourlyAnalysis();
+
+// Refresh every 10 seconds
+setInterval(loadLastHourlyAnalysis, 10000);
+    </script>
+
+
+</body>
+
+</html>
