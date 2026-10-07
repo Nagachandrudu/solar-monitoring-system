@@ -1,30 +1,23 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from openpyxl import Workbook, load_workbook
 from datetime import datetime
-import os
 import statistics
-import threading
-import time
+import os
+
+from supabase_client import supabase
 
 
-# Stores the latest automatic hourly analysis result
-last_hourly_analysis = {
-    "status": "WAITING",
-    "message": "No automatic hourly analysis completed yet.",
-    "analysis_time": None
-}
-
-
+# =========================================================
+# FLASK APP
+# =========================================================
 
 app = Flask(__name__)
 CORS(app)
 
-# =========================================================
-# CONFIGURATION
-# =========================================================
 
-EXCEL_FILE = "solar_data.xlsx"
+# =========================================================
+# LATEST DATA
+# =========================================================
 
 latest_data = {
     "voltage": 0,
@@ -37,41 +30,41 @@ latest_data = {
 
 
 # =========================================================
-# CREATE EXCEL FILE
+# LAST AUTOMATIC HOURLY ANALYSIS
 # =========================================================
 
-def create_excel_file():
-
-    if not os.path.exists(EXCEL_FILE):
-
-        workbook = Workbook()
-
-        sheet = workbook.active
-        sheet.title = "Solar Data"
-
-        sheet.append([
-            "DateTime",
-            "Voltage (V)",
-            "Current (mA)",
-            "Power (mW)",
-            "Temperature (°C)",
-            "Light (lux)"
-        ])
-
-        workbook.save(EXCEL_FILE)
-
-
-create_excel_file()
+last_hourly_analysis = {
+    "status": "WAITING",
+    "message": "No automatic hourly analysis completed yet.",
+    "analysis_time": None,
+    "data": None
+}
 
 
 # =========================================================
-# HOME
+# HOME / DASHBOARD
 # =========================================================
 
 @app.route("/")
 def home():
 
-    return "Solar Monitoring Backend is Running!"
+    return send_from_directory(
+        os.path.dirname(os.path.abspath(__file__)),
+        "index.html"
+    )
+
+
+# =========================================================
+# HEALTH CHECK
+# =========================================================
+
+@app.route("/health", methods=["GET"])
+def health():
+
+    return jsonify({
+        "status": "online",
+        "message": "Solar Monitoring Backend is running."
+    })
 
 
 # =========================================================
@@ -88,100 +81,146 @@ def receive_data():
         data = request.get_json()
 
         if not data:
+
             return jsonify({
                 "status": "error",
                 "message": "No JSON data received"
             }), 400
 
-        voltage = data.get("voltage")
-        current = data.get("current")
-        power = data.get("power")
+
+        # -------------------------------------------------
+        # GET SENSOR VALUES
+        # -------------------------------------------------
+
+        voltage = data.get("voltage", 0)
+        current = data.get("current", 0)
+        power = data.get("power", 0)
         temperature = data.get("temperature")
-        light = data.get("light")
+        light = data.get("light", 0)
+
 
         # -------------------------------------------------
-        # CHECK BASIC SENSOR VALUES
+        # CONVERT NUMERIC VALUES
         # -------------------------------------------------
 
-        if voltage is None:
+        try:
+            voltage = float(voltage)
+        except:
             voltage = 0
 
-        if current is None:
+
+        try:
+            current = float(current)
+        except:
             current = 0
 
-        if power is None:
+
+        try:
+            power = float(power)
+        except:
             power = 0
 
-        if temperature is None:
-            temperature = None
 
-        if light is None:
+        try:
+            light = float(light)
+        except:
             light = 0
 
+
         # -------------------------------------------------
-        # INVALID TEMPERATURE
-        # DS18B20 often gives -127 when disconnected
+        # TEMPERATURE VALIDATION
         # -------------------------------------------------
 
         if temperature is not None:
 
             try:
+
                 temperature = float(temperature)
 
+                # DS18B20 disconnected / invalid reading
                 if temperature <= -50 or temperature >= 100:
+
                     temperature = None
 
             except:
+
                 temperature = None
+
+
+        # -------------------------------------------------
+        # PREVENT NEGATIVE VALUES
+        # -------------------------------------------------
+
+        if voltage < 0:
+            voltage = 0
+
+        if current < 0:
+            current = 0
+
+        if power < 0:
+            power = 0
+
+        if light < 0:
+            light = 0
+
+
+        # -------------------------------------------------
+        # CURRENT TIME
+        # -------------------------------------------------
 
         current_datetime = datetime.now().strftime(
             "%Y-%m-%d %H:%M:%S"
         )
+
 
         # -------------------------------------------------
         # UPDATE LATEST DATA
         # -------------------------------------------------
 
         latest_data = {
+
             "voltage": voltage,
+
             "current": current,
+
             "power": power,
+
             "temperature": temperature,
+
             "light": light,
+
             "datetime": current_datetime
         }
 
+
+        # =================================================
+        # SAVE DATA TO SUPABASE
+        # =================================================
+
+        supabase_data = {
+
+            "voltage": voltage,
+
+            "current": current,
+
+            "power": power,
+
+            "temperature": temperature,
+
+            "light": light
+        }
+
+
+        result = supabase.table(
+            "solar_data"
+        ).insert(
+            supabase_data
+        ).execute()
+
+
         # -------------------------------------------------
-        # SAVE TO EXCEL
+        # PRINT DATA
         # -------------------------------------------------
-
-        workbook = load_workbook(EXCEL_FILE)
-
-        if "Solar Data" not in workbook.sheetnames:
-
-            sheet = workbook.create_sheet("Solar Data")
-
-            sheet.append([
-                "DateTime",
-                "Voltage (V)",
-                "Current (mA)",
-                "Power (mW)",
-                "Temperature (°C)",
-                "Light (lux)"
-            ])
-
-        sheet = workbook["Solar Data"]
-
-        sheet.append([
-            current_datetime,
-            voltage,
-            current,
-            power,
-            temperature,
-            light
-        ])
-
-        workbook.save(EXCEL_FILE)
 
         print()
         print("====================================")
@@ -189,27 +228,42 @@ def receive_data():
         print("====================================")
 
         print("Voltage     :", voltage, "V")
+
         print("Current     :", current, "mA")
+
         print("Power       :", power, "mW")
+
         print("Temperature :", temperature, "C")
+
         print("Light       :", light, "lux")
+
         print("Time        :", current_datetime)
+
+        print("Saved to    : Supabase")
 
         print("====================================")
 
+
         return jsonify({
+
             "status": "success",
-            "message": "Data saved successfully",
+
+            "message": "Data saved successfully to Supabase",
+
             "data": latest_data
         })
 
+
     except Exception as e:
 
-        print("ERROR:", str(e))
+        print("SUPABASE DATA ERROR:", str(e))
 
         return jsonify({
+
             "status": "error",
+
             "message": str(e)
+
         }), 500
 
 
@@ -223,98 +277,136 @@ def get_latest():
     return jsonify(latest_data)
 
 
-
-
-
 # =========================================================
-# READ VALID EXCEL DATA
+# READ VALID DATA FROM SUPABASE
 # =========================================================
 
 def read_valid_data():
 
-    if not os.path.exists(EXCEL_FILE):
-        return []
+    try:
 
-    workbook = load_workbook(
-        EXCEL_FILE,
-        data_only=True
-    )
+        result = supabase.table(
+            "solar_data"
+        ).select(
+            "*"
+        ).order(
+            "created_at",
+            desc=False
+        ).execute()
 
-    if "Solar Data" not in workbook.sheetnames:
-        return []
 
-    sheet = workbook["Solar Data"]
+        rows = result.data or []
 
-    records = []
+        records = []
 
-    for row in sheet.iter_rows(min_row=2, values_only=True):
 
-        if len(row) < 6:
-            continue
+        for row in rows:
 
-        date_time = row[0]
-        voltage = row[1]
-        current = row[2]
-        power = row[3]
-        temperature = row[4]
-        light = row[5]
+            try:
 
-        # -------------------------------------------------
-        # CHECK NUMERIC VALUES
-        # -------------------------------------------------
+                voltage = float(
+                    row.get("voltage", 0)
+                )
 
-        try:
+                current = float(
+                    row.get("current", 0)
+                )
 
-            voltage = float(voltage)
-            current = float(current)
-            power = float(power)
-            light = float(light)
+                power = float(
+                    row.get("power", 0)
+                )
 
-            if temperature is None:
+                light = float(
+                    row.get("light", 0)
+                )
+
+                temperature = row.get(
+                    "temperature"
+                )
+
+
+                if temperature is None:
+                    continue
+
+
+                temperature = float(
+                    temperature
+                )
+
+
+            except:
+
                 continue
 
-            temperature = float(temperature)
 
-        except:
+            # -------------------------------------------------
+            # INVALID VALUES
+            # -------------------------------------------------
 
-            continue
+            if temperature <= -50 or temperature >= 100:
+                continue
 
-        # -------------------------------------------------
-        # REMOVE INVALID SENSOR VALUES
-        # -------------------------------------------------
+            if voltage < 0:
+                continue
 
-        if temperature <= -50 or temperature >= 100:
-            continue
+            if current < 0:
+                continue
 
-        if voltage < 0:
-            continue
+            if power < 0:
+                continue
 
-        if current < 0:
-            continue
+            if light < 0:
+                continue
 
-        if power < 0:
-            continue
 
-        if light < 0:
-            continue
+            # -------------------------------------------------
+            # DATETIME
+            # -------------------------------------------------
 
-        records.append({
-            "datetime": str(date_time),
-            "voltage": voltage,
-            "current": current,
-            "power": power,
-            "temperature": temperature,
-            "light": light
-        })
+            date_time = row.get(
+                "created_at",
+                ""
+            )
 
-    return records
+
+            records.append({
+
+                "datetime": str(date_time),
+
+                "voltage": voltage,
+
+                "current": current,
+
+                "power": power,
+
+                "temperature": temperature,
+
+                "light": light
+            })
+
+
+        return records
+
+
+    except Exception as e:
+
+        print(
+            "SUPABASE READ ERROR:",
+            str(e)
+        )
+
+        return []
 
 
 # =========================================================
 # FIND EXPECTED POWER FROM BASELINE DATA
 # =========================================================
 
-def calculate_expected_power(light, temperature, records):
+def calculate_expected_power(
+    light,
+    temperature,
+    records
+):
 
     if not records:
 
@@ -323,14 +415,17 @@ def calculate_expected_power(light, temperature, records):
 
     # -----------------------------------------------------
     # STEP 1
-    # Find records having similar light intensity
-    #
-    # Light tolerance = approximately ±20%
+    # Similar light and temperature
     # -----------------------------------------------------
 
-    light_tolerance = max(10, light * 0.20)
+    light_tolerance = max(
+        10,
+        light * 0.20
+    )
+
 
     similar_records = []
+
 
     for record in records:
 
@@ -342,22 +437,31 @@ def calculate_expected_power(light, temperature, records):
             record["temperature"] - temperature
         )
 
+
         if (
+
             light_difference <= light_tolerance
-            and temperature_difference <= 5
+
+            and
+
+            temperature_difference <= 5
+
         ):
 
-            similar_records.append(record)
+            similar_records.append(
+                record
+            )
 
 
     # -----------------------------------------------------
     # STEP 2
-    # If not enough records, use wider light range
+    # Wider light range
     # -----------------------------------------------------
 
     if len(similar_records) < 3:
 
         similar_records = []
+
 
         for record in records:
 
@@ -365,25 +469,37 @@ def calculate_expected_power(light, temperature, records):
                 record["light"] - light
             )
 
-            if light_difference <= max(20, light * 0.40):
 
-                similar_records.append(record)
+            if light_difference <= max(
+                20,
+                light * 0.40
+            ):
+
+                similar_records.append(
+                    record
+                )
 
 
     # -----------------------------------------------------
     # STEP 3
-    # If still no data, use nearest records
+    # Nearest records
     # -----------------------------------------------------
 
     if len(similar_records) < 3:
 
         sorted_records = sorted(
+
             records,
+
             key=lambda r:
-            abs(r["light"] - light)
+                abs(r["light"] - light)
+
         )
 
-        similar_records = sorted_records[:5]
+
+        similar_records = (
+            sorted_records[:5]
+        )
 
 
     if not similar_records:
@@ -393,23 +509,19 @@ def calculate_expected_power(light, temperature, records):
 
     # -----------------------------------------------------
     # STEP 4
-    # Use positive power values
-    #
-    # This avoids zero-power records dominating
-    # the healthy baseline.
+    # POSITIVE POWER VALUES
     # -----------------------------------------------------
 
     positive_powers = [
+
         r["power"]
+
         for r in similar_records
+
         if r["power"] > 0
+
     ]
 
-
-    # -----------------------------------------------------
-    # If all values are zero, we cannot create a
-    # meaningful expected-power baseline.
-    # -----------------------------------------------------
 
     if not positive_powers:
 
@@ -418,101 +530,107 @@ def calculate_expected_power(light, temperature, records):
 
     # -----------------------------------------------------
     # STEP 5
-    # Use 75th percentile-like value.
-    #
-    # This represents better observed performance
-    # under similar conditions.
+    # 75th percentile-like value
     # -----------------------------------------------------
 
     positive_powers.sort()
 
+
     index = int(
-        0.75 * (len(positive_powers) - 1)
+
+        0.75 *
+        (len(positive_powers) - 1)
+
     )
 
-    expected_power = positive_powers[index]
+
+    expected_power = (
+        positive_powers[index]
+    )
 
 
     # -----------------------------------------------------
-    # Temperature correction
-    #
-    # Small correction only.
+    # TEMPERATURE CORRECTION
     # -----------------------------------------------------
 
-    temperature_difference = temperature - 32.0
-
-    temperature_factor = 1.0 - (
-        temperature_difference * 0.005
+    temperature_difference = (
+        temperature - 32.0
     )
 
-    # Keep factor within safe limits
+
+    temperature_factor = (
+        1.0 -
+        (
+            temperature_difference
+            * 0.005
+        )
+    )
+
 
     if temperature_factor < 0.90:
+
         temperature_factor = 0.90
 
+
     if temperature_factor > 1.10:
+
         temperature_factor = 1.10
 
 
-    expected_power *= temperature_factor
+    expected_power *= (
+        temperature_factor
+    )
 
 
-    return expected_power, "BASELINE"
+    return (
+        expected_power,
+        "BASELINE"
+    )
 
 
 # =========================================================
 # CLASSIFY SOLAR PERFORMANCE
 # =========================================================
 
-def classify_power(actual_power, expected_power):
-
-    # -----------------------------------------------------
-    # No baseline available
-    # -----------------------------------------------------
+def classify_power(
+    actual_power,
+    expected_power
+):
 
     if expected_power <= 0:
 
         return {
-            "status": "NO BASELINE",
-            "percentage": 0
+
+            "status":
+                "NO BASELINE",
+
+            "percentage":
+                0
         }
 
 
     percentage = (
-        actual_power / expected_power
+
+        actual_power /
+        expected_power
+
     ) * 100
 
-
-    # -----------------------------------------------------
-    # NORMAL
-    # -----------------------------------------------------
 
     if percentage >= 90:
 
         status = "NORMAL"
 
 
-    # -----------------------------------------------------
-    # WARNING
-    # -----------------------------------------------------
-
     elif percentage >= 70:
 
         status = "WARNING"
 
 
-    # -----------------------------------------------------
-    # LOW OUTPUT
-    # -----------------------------------------------------
-
     elif percentage >= 50:
 
         status = "LOW OUTPUT"
 
-
-    # -----------------------------------------------------
-    # CRITICAL
-    # -----------------------------------------------------
 
     else:
 
@@ -520,63 +638,77 @@ def classify_power(actual_power, expected_power):
 
 
     return {
-        "status": status,
-        "percentage": round(percentage, 2)
+
+        "status":
+            status,
+
+        "percentage":
+            round(
+                percentage,
+                2
+            )
     }
-
-# =========================================================
-# LAST AUTOMATIC HOURLY ANALYSIS
-# =========================================================
-
-@app.route("/last-hourly-analysis", methods=["GET"])
-def get_last_hourly_analysis():
-
-    return jsonify(last_hourly_analysis)
-
-
 
 
 # =========================================================
 # ANALYZE STORED DATA
 # =========================================================
 
-@app.route("/analyze", methods=["GET"])
+@app.route(
+    "/analyze",
+    methods=["GET"]
+)
 def analyze_data():
 
     try:
 
         # -------------------------------------------------
-        # READ VALID DATA
+        # READ SUPABASE DATA
         # -------------------------------------------------
 
         records = read_valid_data()
 
 
         # -------------------------------------------------
-        # COUNT TOTAL EXCEL RECORDS
+        # TOTAL RECORDS
         # -------------------------------------------------
 
-        workbook = load_workbook(
-            EXCEL_FILE,
-            data_only=True
-        )
+        try:
 
-        if "Solar Data" in workbook.sheetnames:
-
-            sheet = workbook["Solar Data"]
-
-            total_records = max(
-                0,
-                sheet.max_row - 1
+            count_result = (
+                supabase
+                .table("solar_data")
+                .select(
+                    "id",
+                    count="exact"
+                )
+                .execute()
             )
 
-        else:
 
-            total_records = 0
+            total_records = (
+                count_result.count
+                if count_result.count is not None
+                else len(records)
+            )
 
+
+        except:
+
+            total_records = len(
+                records
+            )
+
+
+        # -------------------------------------------------
+        # INVALID RECORDS
+        # -------------------------------------------------
 
         invalid_temperature_records = (
-            total_records - len(records)
+
+            total_records -
+            len(records)
+
         )
 
 
@@ -588,9 +720,11 @@ def analyze_data():
 
             return jsonify({
 
-                "status": "success",
+                "status":
+                    "success",
 
-                "overall_status": "NO VALID DATA",
+                "overall_status":
+                    "NO VALID DATA",
 
                 "message":
                     "No valid solar data available.",
@@ -604,21 +738,29 @@ def analyze_data():
                 "invalid_temperature_records":
                     invalid_temperature_records,
 
-                "normal": 0,
+                "normal":
+                    0,
 
-                "warning": 0,
+                "warning":
+                    0,
 
-                "low_output": 0,
+                "low_output":
+                    0,
 
-                "critical": 0,
+                "critical":
+                    0,
 
-                "average_power": 0,
+                "average_power":
+                    0,
 
-                "average_temperature": 0,
+                "average_temperature":
+                    0,
 
-                "average_light": 0,
+                "average_light":
+                    0,
 
-                "records": []
+                "records":
+                    []
 
             })
 
@@ -628,15 +770,29 @@ def analyze_data():
         # -------------------------------------------------
 
         average_power = statistics.mean(
-            r["power"] for r in records
+
+            r["power"]
+
+            for r in records
+
         )
+
 
         average_temperature = statistics.mean(
-            r["temperature"] for r in records
+
+            r["temperature"]
+
+            for r in records
+
         )
 
+
         average_light = statistics.mean(
-            r["light"] for r in records
+
+            r["light"]
+
+            for r in records
+
         )
 
 
@@ -645,9 +801,13 @@ def analyze_data():
         # -------------------------------------------------
 
         normal_count = 0
+
         warning_count = 0
+
         low_output_count = 0
+
         critical_count = 0
+
         no_baseline_count = 0
 
 
@@ -660,24 +820,39 @@ def analyze_data():
 
         for record in records:
 
+
             expected_power, baseline_type = (
+
                 calculate_expected_power(
+
                     record["light"],
+
                     record["temperature"],
+
                     records
+
                 )
+
             )
 
 
             classification = classify_power(
+
                 record["power"],
+
                 expected_power
+
             )
 
 
-            status = classification["status"]
+            status = classification[
+                "status"
+            ]
 
-            percentage = classification["percentage"]
+
+            percentage = classification[
+                "percentage"
+            ]
 
 
             # -------------------------------------------------
@@ -688,17 +863,21 @@ def analyze_data():
 
                 normal_count += 1
 
+
             elif status == "WARNING":
 
                 warning_count += 1
+
 
             elif status == "LOW OUTPUT":
 
                 low_output_count += 1
 
+
             elif status == "CRITICAL":
 
                 critical_count += 1
+
 
             elif status == "NO BASELINE":
 
@@ -715,92 +894,139 @@ def analyze_data():
                     record["datetime"],
 
                 "voltage":
-                    round(record["voltage"], 2),
+                    round(
+                        record["voltage"],
+                        2
+                    ),
 
                 "current":
-                    round(record["current"], 2),
+                    round(
+                        record["current"],
+                        2
+                    ),
 
                 "actual_power":
-                    round(record["power"], 3),
+                    round(
+                        record["power"],
+                        3
+                    ),
 
                 "temperature":
-                    round(record["temperature"], 2),
+                    round(
+                        record["temperature"],
+                        2
+                    ),
 
                 "light":
-                    round(record["light"], 2),
+                    round(
+                        record["light"],
+                        2
+                    ),
 
                 "expected_power":
-                    round(expected_power, 3),
+                    round(
+                        expected_power,
+                        3
+                    ),
 
                 "performance":
-                    round(percentage, 2),
+                    round(
+                        percentage,
+                        2
+                    ),
 
                 "status":
                     status,
 
                 "baseline":
                     baseline_type
-
             })
 
 
         # -------------------------------------------------
-        # OVERALL SYSTEM STATUS
-        # -----------------------------------------------------
+        # OVERALL STATUS
+        # -------------------------------------------------
 
         usable_status_count = (
+
             normal_count
+
             + warning_count
+
             + low_output_count
+
             + critical_count
+
         )
 
 
         if usable_status_count == 0:
 
-            overall_status = "NO BASELINE"
+            overall_status = (
+                "NO BASELINE"
+            )
 
             message = (
-                "Not enough positive power data "
-                "to create a performance baseline."
+                "Not enough positive power "
+                "data to create a performance "
+                "baseline."
             )
+
 
         elif critical_count > (
+
             usable_status_count * 0.50
+
         ):
 
-            overall_status = "CRITICAL"
-
-            message = (
-                "System producing much less power. "
-                "Please check your solar system."
+            overall_status = (
+                "CRITICAL"
             )
 
+            message = (
+                "System producing much less "
+                "power. Please check your "
+                "solar system."
+            )
+
+
         elif low_output_count > (
+
             usable_status_count * 0.30
+
         ):
 
-            overall_status = "LOW OUTPUT"
+            overall_status = (
+                "LOW OUTPUT"
+            )
 
             message = (
                 "Solar system output is below "
                 "the expected level."
             )
 
+
         elif warning_count > (
+
             usable_status_count * 0.30
+
         ):
 
-            overall_status = "WARNING"
+            overall_status = (
+                "WARNING"
+            )
 
             message = (
                 "Solar system performance needs "
                 "attention."
             )
 
+
         else:
 
-            overall_status = "NORMAL"
+            overall_status = (
+                "NORMAL"
+            )
 
             message = (
                 "Solar system is operating "
@@ -809,12 +1035,13 @@ def analyze_data():
 
 
         # -------------------------------------------------
-        # FINAL RESPONSE
+        # FINAL RESULT
         # -------------------------------------------------
 
         return jsonify({
 
-            "status": "success",
+            "status":
+                "success",
 
             "overall_status":
                 overall_status,
@@ -847,13 +1074,22 @@ def analyze_data():
                 no_baseline_count,
 
             "average_power":
-                round(average_power, 3),
+                round(
+                    average_power,
+                    3
+                ),
 
             "average_temperature":
-                round(average_temperature, 2),
+                round(
+                    average_temperature,
+                    2
+                ),
 
             "average_light":
-                round(average_light, 2),
+                round(
+                    average_light,
+                    2
+                ),
 
             "records":
                 analysis_records
@@ -863,86 +1099,168 @@ def analyze_data():
 
     except Exception as e:
 
-        print("ANALYSIS ERROR:", str(e))
+        print(
+            "ANALYSIS ERROR:",
+            str(e)
+        )
+
 
         return jsonify({
 
-            "status": "error",
+            "status":
+                "error",
 
-            "message": str(e)
+            "message":
+                str(e)
 
         }), 500
 
 
+# =========================================================
+# LAST AUTOMATIC HOURLY ANALYSIS
+# =========================================================
+
+@app.route(
+    "/last-hourly-analysis",
+    methods=["GET"]
+)
+def get_last_hourly_analysis():
+
+    return jsonify(
+        last_hourly_analysis
+    )
+
 
 # =========================================================
-# AUTOMATIC HOURLY ANALYSIS
+# UPDATE LAST HOURLY ANALYSIS
+#
+# This endpoint is intentionally provided for the
+# future Render Cron Job.
 # =========================================================
 
-def automatic_hourly_analysis():
+@app.route(
+    "/run-hourly-analysis",
+    methods=["GET"]
+)
+def run_hourly_analysis():
 
-    while True:
+    global last_hourly_analysis
 
-        time.sleep(60)   # 1 hour
+    try:
 
-        try:
-            print()
-            print("====================================")
-            print("     AUTOMATIC HOURLY ANALYSIS")
-            print("====================================")
+        with app.test_request_context(
+            "/analyze"
+        ):
 
-            with app.test_request_context("/analyze"):
-                result = analyze_data()
+            result = analyze_data()
 
-            analysis_result = result.get_json()
 
-            last_hourly_analysis.clear()
-            last_hourly_analysis.update({
-                "status": analysis_result.get("overall_status", "UNKNOWN"),
-                "message": analysis_result.get(
-                "message",
-                "Automatic analysis completed."
+        analysis_result = (
+            result.get_json()
+        )
+
+
+        last_hourly_analysis = {
+
+            "status":
+                analysis_result.get(
+                    "overall_status",
+                    "UNKNOWN"
                 ),
-                "analysis_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "data": analysis_result
-        })
 
-            print("Automatic analysis completed.")
-            print("Result:")
-            print(analysis_result)
+            "message":
+                analysis_result.get(
+                    "message",
+                    "Automatic analysis completed."
+                ),
 
-            print("====================================")
-            print()
+            "analysis_time":
+                datetime.now().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
 
-        except Exception as e:
-            print("AUTOMATIC ANALYSIS ERROR:", str(e))
+            "data":
+                analysis_result
+
+        }
+
+
+        print()
+        print(
+            "===================================="
+        )
+        print(
+            "     HOURLY ANALYSIS COMPLETED"
+        )
+        print(
+            "===================================="
+        )
+
+        print(
+            analysis_result
+        )
+
+        print(
+            "===================================="
+        )
+        print()
+
+
+        return jsonify(
+            last_hourly_analysis
+        )
+
+
+    except Exception as e:
+
+        print(
+            "HOURLY ANALYSIS ERROR:",
+            str(e)
+        )
+
+
+        return jsonify({
+
+            "status":
+                "error",
+
+            "message":
+                str(e)
+
+        }), 500
 
 
 # =========================================================
-# RUN FLASK SERVER
+# RUN APPLICATION
 # =========================================================
-
-
 
 if __name__ == "__main__":
 
     print()
-    print("====================================")
-    print("     SOLAR MONITORING BACKEND")
-    print("====================================")
-    print("Server running on:")
-    print("http://0.0.0.0:5000")
-    print("====================================")
-    print()
-    analysis_thread = threading.Thread(
-        target=automatic_hourly_analysis,
-        daemon=True
+    print(
+        "===================================="
     )
+    print(
+        "     SOLAR MONITORING BACKEND"
+    )
+    print(
+        "===================================="
+    )
+    print(
+        "Server running on port 5000"
+    )
+    print(
+        "===================================="
+    )
+    print()
 
-    analysis_thread.start()
 
     app.run(
+
         host="0.0.0.0",
+
         port=5000,
+
         debug=False
+
     )
